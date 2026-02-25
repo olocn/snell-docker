@@ -1,19 +1,14 @@
-name: snell
-on:
-  workflow_dispatch:
-  push:
-    tags:
-      - "*"
+name: Build Snell Image
 
-env:
-  # 注意：推送到 GHCR 必须包含 ghcr.io 前缀，且通常包含用户名
-  IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "*" ]
+  workflow_dispatch:
 
 jobs:
-  main:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # 必须添加权限声明，否则 GITHUB_TOKEN 无法推送镜像
     permissions:
       contents: read
       packages: write
@@ -26,31 +21,30 @@ jobs:
         run: |
           echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
 
+      # 必须步骤：为了支持跨平台编译 (arm64)
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v3
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          # 这里全部使用内置自动变量，无需手动去 Settings 里填任何东西
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Docker build and push
+      - name: Build and Push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # 自动生成 tags：如果是推 tag 触发，镜像也会带上对应 tag；否则默认为 latest
+          # 自动打上 latest 和 Git Tag 标签
           tags: |
-            ${{ env.IMAGE_REPOSITORY }}:latest
-            ${{ env.IMAGE_REPOSITORY }}:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
           platforms: |
             linux/amd64
-            linux/arm64
           build-args: |
             BUILD_DATE=${{ env.BUILD_DATE }}
